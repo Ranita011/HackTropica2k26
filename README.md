@@ -9,6 +9,8 @@ Use this account for local testing after running the seed script in `server`:
 - Password: `DemoUser123!`
 - GitHub username: `octocat`
 
+Login supports either email or username with the same password.
+
 Seed command:
 
 ```bash

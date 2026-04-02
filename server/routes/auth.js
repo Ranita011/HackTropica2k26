@@ -6,6 +6,10 @@ const { protect } = require("../middleware/auth");
 
 const router = express.Router();
 
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function sanitizeUser(user) {
   if (!user) {
     return null;
@@ -68,13 +72,19 @@ router.post("/signup", async (req, res) => {
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, username, password } = req.body;
+    const identifierRaw = email ?? username;
+    const identifier = typeof identifierRaw === "string" ? identifierRaw.trim() : "";
 
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required" });
+    if (!identifier || !password) {
+      return res.status(400).json({ message: "Email/username and password are required" });
     }
 
-    const user = await User.findOne({ email });
+    const byEmail = identifier.toLowerCase();
+    const usernamePattern = new RegExp(`^${escapeRegex(identifier)}$`, "i");
+    const user = await User.findOne({
+      $or: [{ email: byEmail }, { username: usernamePattern }],
+    });
     if (!user) {
       return res.status(400).json({ message: "Invalid credentials" });
     }

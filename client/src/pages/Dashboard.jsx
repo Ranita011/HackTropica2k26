@@ -105,56 +105,68 @@ export default function Dashboard() {
       return { success: false, error: "Missing token" };
     }
 
-    const requestId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const connectOnce = () => {
+      const requestId =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-    const result = await new Promise((resolve) => {
-      let settled = false;
-      const timeout = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          window.removeEventListener("message", onResult);
-          resolve({ success: false, error: "Extension did not respond" });
-        }
-      }, 1500);
+      return new Promise((resolve) => {
+        let settled = false;
+        const timeout = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            window.removeEventListener("message", onResult);
+            resolve({ success: false, error: "Extension did not respond" });
+          }
+        }, 3000);
 
-      const onResult = (event) => {
-        if (event.source !== window) return;
+        const onResult = (event) => {
+          if (event.source !== window) return;
 
-        const data = event.data;
-        if (!data || typeof data !== "object") return;
-        if (data.source !== "codestreak-extension") return;
-        if (data.type !== "CODESTREAK_SET_AUTH_RESULT") return;
-        if (data.requestId !== requestId) return;
+          const data = event.data;
+          if (!data || typeof data !== "object") return;
+          if (data.source !== "codestreak-extension") return;
+          if (data.type !== "CODESTREAK_SET_AUTH_RESULT") return;
+          if (data.requestId !== requestId) return;
 
-        if (!settled) {
-          settled = true;
-          clearTimeout(timeout);
-          window.removeEventListener("message", onResult);
-          resolve({
-            success: Boolean(data.success),
-            error: data.error || "",
-          });
-        }
-      };
+          if (!settled) {
+            settled = true;
+            clearTimeout(timeout);
+            window.removeEventListener("message", onResult);
+            resolve({
+              success: Boolean(data.success),
+              error: data.error || "",
+            });
+          }
+        };
 
-      window.addEventListener("message", onResult);
-      window.postMessage(
-        {
-          source: "codestreak-web",
-          type: "CODESTREAK_SET_AUTH",
-          requestId,
-          payload: {
-            jwtToken,
-            apiBaseUrl: api.API_URL,
+        window.addEventListener("message", onResult);
+        window.postMessage(
+          {
+            source: "codestreak-web",
+            type: "CODESTREAK_SET_AUTH",
+            requestId,
+            payload: {
+              jwtToken,
+              apiBaseUrl: api.API_URL,
+            },
           },
-        },
-        "*"
-      );
-    });
+          "*"
+        );
+      });
+    };
 
+    let result = await connectOnce();
+    if (result.success) return result;
+
+    // Extension service worker/content script can be cold-started; retry once.
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    result = await connectOnce();
+    if (result.success) return result;
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    result = await connectOnce();
     return result;
   };
 
@@ -178,7 +190,7 @@ export default function Dashboard() {
         }
 
         setExtensionStatus(
-          `Auto-connect failed: ${result.error || "Unknown error"}`
+          `Auto-connect failed: ${result.error || "Unknown error"}. Reload the dashboard tab after enabling/updating the extension.`
         );
       })
       .finally(() => {
@@ -202,7 +214,9 @@ export default function Dashboard() {
       if (result.success) {
         setExtensionStatus("Extension connected successfully.");
       } else {
-        setExtensionStatus(`Extension connection failed: ${result.error || "Unknown error"}`);
+        setExtensionStatus(
+          `Extension connection failed: ${result.error || "Unknown error"}. Reload this tab after enabling/updating the extension.`
+        );
       }
     } finally {
       setConnectingExtension(false);
@@ -228,7 +242,7 @@ export default function Dashboard() {
       <section className="surface overflow-hidden">
         <div className="grid gap-6 p-6 lg:grid-cols-[1.15fr_0.85fr] lg:p-8">
           <div>
-            <div className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200">
+            <div className="inline-flex rounded-full border border-blue-400/20 bg-blue-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-blue-200">
               Dashboard
             </div>
             <h1 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl">
@@ -259,7 +273,7 @@ export default function Dashboard() {
           </div>
 
           <div className="surface-soft p-5">
-            <div className="text-sm font-semibold text-emerald-200">Verification status</div>
+            <div className="text-sm font-semibold text-blue-200">Verification status</div>
             <div className="mt-2 text-2xl font-black text-white">
               {hasGithub ? "Ready to verify" : "Needs GitHub setup"}
             </div>
@@ -304,7 +318,7 @@ export default function Dashboard() {
             <div
               className={`mt-5 rounded-2xl border px-4 py-3 text-sm ${
                 verifyResult.verified
-                  ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+                  ? "border-blue-400/20 bg-blue-400/10 text-blue-100"
                   : "border-amber-400/20 bg-amber-400/10 text-amber-100"
               }`}
             >
@@ -319,7 +333,7 @@ export default function Dashboard() {
         <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-6 shadow-[0_20px_80px_rgba(2,6,23,0.3)]">
           <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Profile</div>
           {hasGithub ? (
-            <div className="mt-3 inline-flex items-center rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-sm font-semibold text-emerald-200">
+            <div className="mt-3 inline-flex items-center rounded-full border border-blue-400/20 bg-blue-400/10 px-3 py-1.5 text-sm font-semibold text-blue-200">
               GitHub: {user.githubUsername}
             </div>
           ) : (
@@ -374,7 +388,7 @@ export default function Dashboard() {
         </div>
 
         {extensionStatus ? (
-          <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+          <div className="mt-4 rounded-2xl border border-blue-400/20 bg-blue-400/10 px-4 py-3 text-sm text-blue-100">
             {extensionStatus}
           </div>
         ) : null}
