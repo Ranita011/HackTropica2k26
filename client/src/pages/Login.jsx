@@ -6,7 +6,7 @@ export default function Login() {
   const navigate = useNavigate();
   const { login, authError } = useAuth();
 
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState("");
@@ -16,7 +16,7 @@ export default function Login() {
     setLocalError("");
     setSubmitting(true);
     try {
-      await login({ email, password });
+      await login({ email: identifier, password });
       navigate("/dashboard");
     } catch (err) {
       setLocalError(err?.message || "Login failed");
@@ -58,14 +58,14 @@ export default function Login() {
 
         <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">
           <label className="flex flex-col gap-2 text-sm text-slate-200">
-            Email
+            Email or username
             <input
               className="field"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              type="email"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              type="text"
               required
-              placeholder="you@example.com"
+              placeholder="you@example.com or demouser"
             />
           </label>
           <label className="flex flex-col gap-2 text-sm text-slate-200">
