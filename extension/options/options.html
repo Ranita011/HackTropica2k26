@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CodeStreak Options</title>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        padding: 16px;
+        background: #0d1117;
+        color: #e6edf3;
+      }
+      .card {
+        max-width: 720px;
+      }
+      label {
+        display: block;
+        margin-top: 12px;
+        font-size: 13px;
+        color: #8b949e;
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 10px 12px;
+        margin-top: 6px;
+        background: #161b22;
+        color: #e6edf3;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        outline: none;
+      }
+      textarea {
+        width: 100%;
+        padding: 10px 12px;
+        margin-top: 6px;
+        background: #161b22;
+        color: #e6edf3;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        outline: none;
+        min-height: 92px;
+        resize: vertical;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 6px;
+      }
+      .row input {
+        width: 18px;
+        height: 18px;
+      }
+      button {
+        margin-top: 16px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        border: 1px solid rgba(0, 255, 136, 0.3);
+        background: rgba(0, 255, 136, 0.1);
+        color: #00ff88;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .status {
+        margin-top: 10px;
+        font-size: 13px;
+        color: #8b949e;
+      }
+      .hint {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #484f58;
+        line-height: 1.4;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1 style="margin: 0 0 8px 0; font-size: 18px;">CodeStreak Options</h1>
+      <p style="margin: 0 0 14px 0; font-size: 13px; color: #8b949e;">
+        Configure the backend so the extension can sync focus sessions and verify
+        streaks.
+      </p>
+
+      <label for="apiBaseUrl">Backend API Base URL</label>
+      <input id="apiBaseUrl" type="text" placeholder="http://localhost:5000" />
+      <div class="hint">
+        Used for extension calls like <code>/api/focus/session</code> and <code>/api/check</code>.
+      </div>
+
+      <label for="jwtToken">JWT Token</label>
+      <textarea
+        id="jwtToken"
+        placeholder="Paste the token from the web app login/signup response."
+      ></textarea>
+
+      <label>
+        <div class="row">
+          <input id="autoVerifyOnStop" type="checkbox" />
+          <span>Auto-verify streak on focus stop</span>
+        </div>
+      </label>
+
+      <button id="saveBtn" type="button">Save</button>
+      <div class="status" id="status"></div>
+    </div>
+
+    <script src="options.js"></script>
+  </body>
+</html>
+

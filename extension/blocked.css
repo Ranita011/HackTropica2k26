@@ -1,0 +1,120 @@
+/* ============================================================
+   CodeStreak Enforcer — Blocked Page Overlay Styles
+   ============================================================ */
+
+#codestreak-block-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: all !important;
+  animation: cse-fadeIn 0.4s ease-out !important;
+}
+
+#codestreak-block-overlay .cse-overlay-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, #0a0a0a 0%, #0d1117 40%, #010d05 100%);
+  opacity: 0.98;
+}
+
+#codestreak-block-overlay .cse-overlay-content {
+  position: relative;
+  text-align: center;
+  color: #e6edf3;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  max-width: 500px;
+  padding: 48px 40px;
+}
+
+#codestreak-block-overlay .cse-shield-icon {
+  margin-bottom: 20px;
+  animation: cse-float 3s ease-in-out infinite;
+}
+
+#codestreak-block-overlay .cse-block-title {
+  font-size: 40px;
+  font-weight: 800;
+  color: #00ff88;
+  margin: 0 0 12px 0;
+  text-shadow: 0 0 30px rgba(0, 255, 136, 0.3), 0 0 60px rgba(0, 255, 136, 0.1);
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+}
+
+#codestreak-block-overlay .cse-block-subtitle {
+  font-size: 16px;
+  color: #8b949e;
+  margin: 0 0 28px 0;
+  line-height: 1.6;
+}
+
+#codestreak-block-overlay .cse-block-divider {
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #00ff88, transparent);
+  margin: 0 auto 28px auto;
+  border-radius: 2px;
+}
+
+#codestreak-block-overlay .cse-block-quote {
+  font-size: 14px;
+  color: #58a6ff;
+  margin: 0 0 32px 0;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+#codestreak-block-overlay .cse-block-timer {
+  font-size: 48px;
+  font-weight: 700;
+  color: #00ff88;
+  font-family: 'Consolas', 'Courier New', monospace;
+  letter-spacing: 4px;
+  margin: 0 0 8px 0;
+  text-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+}
+
+#codestreak-block-overlay .cse-block-timer-label {
+  font-size: 12px;
+  color: #484f58;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin: 0;
+}
+
+/* Animations */
+@keyframes cse-fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes cse-fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes cse-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}

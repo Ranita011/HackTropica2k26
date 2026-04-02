@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeStreak Enforcer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="logo-section">
+        <div class="logo-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2L3 7V12C3 17.55 6.84 22.74 12 24C17.16 22.74 21 17.55 21 12V7L12 2Z" 
+                  fill="url(#logo-grad)" stroke="#00ff88" stroke-width="1"/>
+            <path d="M10 15.5L7.5 13L6.09 14.41L10 18.33L18 10.33L16.59 8.92L10 15.5Z" fill="#00ff88"/>
+            <defs>
+              <linearGradient id="logo-grad" x1="3" y1="2" x2="21" y2="24">
+                <stop offset="0%" stop-color="rgba(0,255,136,0.2)"/>
+                <stop offset="100%" stop-color="rgba(0,255,136,0.05)"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <h1>CodeStreak</h1>
+          <span class="logo-subtitle">Enforcer</span>
+        </div>
+      </div>
+      <div class="status-badge" id="statusBadge">
+        <span class="status-dot"></span>
+        <span class="status-text">Inactive</span>
+      </div>
+    </header>
+
+    <!-- Timer Section -->
+    <section class="timer-section" id="timerSection">
+      <div class="timer-ring" id="timerRing">
+        <svg class="timer-svg" viewBox="0 0 200 200">
+          <circle class="timer-track" cx="100" cy="100" r="88" />
+          <circle class="timer-progress" id="timerProgress" cx="100" cy="100" r="88" />
+        </svg>
+        <div class="timer-display">
+          <span class="timer-value" id="timerValue">00:00:00</span>
+          <span class="timer-label">FOCUS TIME</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Focus Button -->
+    <section class="action-section">
+      <button class="focus-btn" id="focusBtn">
+        <span class="btn-icon" id="btnIcon">▶</span>
+        <span class="btn-text" id="btnText">Start Focus Mode</span>
+      </button>
+    </section>
+
+    <!-- Stats Row -->
+    <section class="stats-section">
+      <div class="stat-card">
+        <span class="stat-value" id="blockedCount">0</span>
+        <span class="stat-label">Blocked</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-card">
+        <span class="stat-value" id="sessionCount">0</span>
+        <span class="stat-label">Sessions</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-card">
+        <span class="stat-value" id="totalTime">0h</span>
+        <span class="stat-label">Total Focus</span>
+      </div>
+    </section>
+
+    <!-- Tabs Navigation -->
+    <nav class="tabs-nav">
+      <button class="tab-btn active" data-tab="blocked">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/>
+        </svg>
+        Blocked Sites
+      </button>
+      <button class="tab-btn" data-tab="allowed">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+        </svg>
+        Allowed Sites
+      </button>
+    </nav>
+
+    <!-- Tab Content: Blocked Sites -->
+    <section class="tab-content active" id="tab-blocked">
+      <div class="sites-input-row">
+        <input type="text" id="addBlockedInput" placeholder="e.g. example.com" class="site-input" />
+        <button class="add-site-btn" id="addBlockedBtn">+</button>
+      </div>
+      <div class="sites-list" id="blockedSitesList">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- Tab Content: Allowed Sites -->
+    <section class="tab-content" id="tab-allowed">
+      <div class="sites-input-row">
+        <input type="text" id="addAllowedInput" placeholder="e.g. docs.example.com" class="site-input" />
+        <button class="add-site-btn" id="addAllowedBtn">+</button>
+      </div>
+      <div class="sites-list" id="allowedSitesList">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="popup-footer">
+      <span>CodeStreak Enforcer v1.0</span>
+    </footer>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
