@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api/api.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
@@ -10,8 +10,88 @@ function formatMs(ms) {
   return `${totalMins}m`;
 }
 
+function StreakCalendar({ weeks }) {
+  if (!weeks || weeks.length === 0) {
+    return (
+      <div className="text-sm text-slate-400">No activity yet. Start coding!</div>
+    );
+  }
+
+  const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  return (
+    <div className="mt-4">
+      <div className="flex gap-1 text-[10px] text-slate-500">
+        {dayLabels.map((label) => (
+          <div key={label} className="w-3 text-center">{label[0]}</div>
+        ))}
+      </div>
+      <div className="mt-1 flex gap-1">
+        {weeks.map((week, wi) => (
+          <div key={wi} className="flex flex-col gap-1">
+            {week.map((day, di) => (
+              <div
+                key={di}
+                className={`h-3 w-3 rounded-sm ${
+                  day.isFuture
+                    ? "bg-slate-800"
+                    : day.active
+                    ? "bg-emerald-500"
+                    : "bg-slate-700"
+                }`}
+                title={`${day.date}${day.active ? " (active)" : ""}`}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+        <span>Less</span>
+        <div className="h-3 w-3 rounded-sm bg-slate-700" />
+        <div className="h-3 w-3 rounded-sm bg-emerald-500" />
+        <span>More</span>
+      </div>
+    </div>
+  );
+}
+
+function StreakBadge({ streak, isActiveToday, isStreakAtRisk }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-4xl">🔥</span>
+      <div>
+        <div className="text-3xl font-black text-white">{streak}</div>
+        <div className="text-sm text-slate-400">day streak</div>
+      </div>
+      {isActiveToday && (
+        <span className="ml-2 rounded-full bg-emerald-500/20 px-2 py-1 text-xs font-semibold text-emerald-300">
+          Active today
+        </span>
+      )}
+      {isStreakAtRisk && (
+        <span className="ml-2 animate-pulse rounded-full bg-amber-500/20 px-2 py-1 text-xs font-semibold text-amber-300">
+          At risk!
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
-  const { user, token, updateProfile, refreshMe } = useAuth();
+  const {
+    user,
+    token,
+    updateProfile,
+    refreshMe,
+    extensionStatus,
+    connectingExtension,
+    connectExtension,
+    startExtensionFocus,
+    stopExtensionFocus,
+    getExtensionFocusStatus,
+  } = useAuth();
+
+  const [isFocusing, setIsFocusing] = useState(false);
   const [githubUsername, setGithubUsername] = useState(user?.githubUsername || "");
   const [verifyGithubUsername, setVerifyGithubUsername] = useState(
     user?.githubUsername || ""
@@ -20,26 +100,34 @@ export default function Dashboard() {
   const [verifyResult, setVerifyResult] = useState(null);
   const [verifying, setVerifying] = useState(false);
   const [profileError, setProfileError] = useState("");
-  const [extensionStatus, setExtensionStatus] = useState("");
-  const [connectingExtension, setConnectingExtension] = useState(false);
-  const autoConnectedTokenRef = useRef("");
+  const [streakStats, setStreakStats] = useState(null);
+  const [streakHistory, setStreakHistory] = useState(null);
 
   useEffect(() => {
     setGithubUsername(user?.githubUsername || "");
     setVerifyGithubUsername(user?.githubUsername || "");
   }, [user]);
 
+  useEffect(() => {
+    if (!token) return;
+    
+    api.streak.stats(token)
+      .then(setStreakStats)
+      .catch(console.error);
+    
+    api.streak.history(token)
+      .then(setStreakHistory)
+      .catch(console.error);
+  }, [token, user]);
+
   const timezoneOffsetMinutes = new Date().getTimezoneOffset();
 
-  // Keep timezone in sync even if the user didn't touch their GitHub field.
   useEffect(() => {
     if (!user || !token) return;
     const hasOffset = Number.isFinite(user.timezoneOffsetMinutes);
     if (hasOffset) return;
 
-    updateProfile({ timezoneOffsetMinutes }).catch(() => {
-      // Non-blocking: streak verification will fall back to server-local time.
-    });
+    updateProfile({ timezoneOffsetMinutes }).catch(() => {});
   }, [user, token, timezoneOffsetMinutes, updateProfile]);
 
   const saveProfile = async () => {
@@ -49,6 +137,7 @@ export default function Dashboard() {
       setProfileError("GitHub username is required.");
       return;
     }
+
     setSavingProfile(true);
     try {
       await updateProfile({
@@ -84,15 +173,16 @@ export default function Dashboard() {
         updateProfile({
           githubUsername: usernameForCheck,
           timezoneOffsetMinutes,
-        }).catch(() => {
-          // Non-blocking: verify result is already available.
-        });
+        }).catch(() => {});
       }
 
-      // Pull latest persisted streak/profile values after a successful verify.
-      refreshMe().catch(() => {
-        // Non-blocking: verify result is already shown in the UI.
-      });
+      const [newStats, newHistory] = await Promise.all([
+        api.streak.stats(token),
+        api.streak.history(token),
+      ]);
+      setStreakStats(newStats);
+      setStreakHistory(newHistory);
+      refreshMe().catch(() => {});
     } catch (err) {
       setVerifyResult({ verified: false, message: err?.message || "Verify failed" });
     } finally {
@@ -100,127 +190,37 @@ export default function Dashboard() {
     }
   };
 
-  const connectExtensionWithToken = async (jwtToken) => {
-    if (!jwtToken) {
-      return { success: false, error: "Missing token" };
-    }
-
-    const connectOnce = () => {
-      const requestId =
-        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-      return new Promise((resolve) => {
-        let settled = false;
-        const timeout = setTimeout(() => {
-          if (!settled) {
-            settled = true;
-            window.removeEventListener("message", onResult);
-            resolve({ success: false, error: "Extension did not respond" });
-          }
-        }, 3000);
-
-        const onResult = (event) => {
-          if (event.source !== window) return;
-
-          const data = event.data;
-          if (!data || typeof data !== "object") return;
-          if (data.source !== "codestreak-extension") return;
-          if (data.type !== "CODESTREAK_SET_AUTH_RESULT") return;
-          if (data.requestId !== requestId) return;
-
-          if (!settled) {
-            settled = true;
-            clearTimeout(timeout);
-            window.removeEventListener("message", onResult);
-            resolve({
-              success: Boolean(data.success),
-              error: data.error || "",
-            });
-          }
-        };
-
-        window.addEventListener("message", onResult);
-        window.postMessage(
-          {
-            source: "codestreak-web",
-            type: "CODESTREAK_SET_AUTH",
-            requestId,
-            payload: {
-              jwtToken,
-              apiBaseUrl: api.API_URL,
-            },
-          },
-          "*"
-        );
-      });
-    };
-
-    let result = await connectOnce();
-    if (result.success) return result;
-
-    // Extension service worker/content script can be cold-started; retry once.
-    await new Promise((resolve) => setTimeout(resolve, 350));
-    result = await connectOnce();
-    if (result.success) return result;
-
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    result = await connectOnce();
-    return result;
+  const onAutoConnectExtension = async () => {
+    if (!token || connectingExtension) return;
+    await connectExtension();
   };
 
   useEffect(() => {
-    if (!token) return;
-    if (autoConnectedTokenRef.current === token) return;
-
-    autoConnectedTokenRef.current = token;
-
-    let cancelled = false;
-    setConnectingExtension(true);
-
-    connectExtensionWithToken(token)
-      .then((result) => {
-        if (cancelled) return;
-
-        if (result.success) {
-          setExtensionStatus("Extension auto-connected.");
-          setTimeout(() => setExtensionStatus(""), 2000);
-          return;
-        }
-
-        setExtensionStatus(
-          `Auto-connect failed: ${result.error || "Unknown error"}. Reload the dashboard tab after enabling/updating the extension.`
-        );
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setConnectingExtension(false);
+    if (token && getExtensionFocusStatus) {
+      getExtensionFocusStatus().then((res) => {
+        if (res?.success && res.payload?.focusMode) {
+          setIsFocusing(true);
         }
       });
+    }
+  }, [token, getExtensionFocusStatus]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
+  const handleStartFocus = async () => {
+    const res = await startExtensionFocus();
+    if (res.success) {
+      setIsFocusing(true);
+    } else {
+      alert("Failed to start focus mode: " + res.error);
+    }
+  };
 
-  const onAutoConnectExtension = async () => {
-    if (!token || connectingExtension) return;
-
-    setConnectingExtension(true);
-    setExtensionStatus("Connecting extension...");
-    try {
-      const result = await connectExtensionWithToken(token);
-      if (result.success) {
-        setExtensionStatus("Extension connected successfully.");
-      } else {
-        setExtensionStatus(
-          `Extension connection failed: ${result.error || "Unknown error"}. Reload this tab after enabling/updating the extension.`
-        );
-      }
-    } finally {
-      setConnectingExtension(false);
-      setTimeout(() => setExtensionStatus(""), 3000);
+  const handleStopFocus = async () => {
+    const res = await stopExtensionFocus();
+    if (res.success) {
+      setIsFocusing(false);
+      refreshMe();
+    } else {
+      alert("Failed to stop focus mode: " + res.error);
     }
   };
 
@@ -229,13 +229,15 @@ export default function Dashboard() {
   const displayedStreak =
     verifyResult && typeof verifyResult.streak === "number"
       ? verifyResult.streak
-      : user.streak || 0;
+      : streakStats?.streak ?? user.streak ?? 0;
   const displayedLongestStreak =
     verifyResult && typeof verifyResult.longestStreak === "number"
       ? verifyResult.longestStreak
-      : user.longestStreak || 0;
+      : streakStats?.longestStreak ?? user.longestStreak ?? 0;
 
   const hasGithub = Boolean(user?.githubUsername);
+  const isActiveToday = streakStats?.isActiveToday ?? false;
+  const isStreakAtRisk = streakStats?.isStreakAtRisk ?? false;
 
   return (
     <div className="space-y-6">
@@ -253,38 +255,50 @@ export default function Dashboard() {
               measure actual work, not just browser time.
             </p>
 
+            <div className="mt-6">
+              <StreakBadge
+                streak={displayedStreak}
+                isActiveToday={isActiveToday}
+                isStreakAtRisk={isStreakAtRisk}
+              />
+            </div>
+
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
               <div className="surface-soft p-4">
-                <div className="text-xs uppercase tracking-[0.22em] text-slate-400">Streak</div>
-                <div className="mt-2 text-2xl font-black text-white">{displayedStreak}</div>
-                <div className="text-sm text-slate-400">current days</div>
+                <div className="text-xs uppercase tracking-[0.22em] text-slate-400">Longest</div>
+                <div className="mt-2 text-2xl font-black text-white">{displayedLongestStreak}</div>
+                <div className="text-sm text-slate-400">days ever</div>
               </div>
               <div className="surface-soft p-4">
                 <div className="text-xs uppercase tracking-[0.22em] text-slate-400">Focus</div>
                 <div className="mt-2 text-2xl font-black text-white">{formatMs(user.totalFocusTime)}</div>
-                <div className="text-sm text-slate-400">total tracked time</div>
+                <div className="text-sm text-slate-400">total tracked</div>
               </div>
               <div className="surface-soft p-4">
-                <div className="text-xs uppercase tracking-[0.22em] text-slate-400">Sessions</div>
-                <div className="mt-2 text-2xl font-black text-white">{user.totalSessions || 0}</div>
-                <div className="text-sm text-slate-400">focus sessions</div>
+                <div className="text-xs uppercase tracking-[0.22em] text-slate-400">Rank</div>
+                <div className="mt-2 text-2xl font-black text-white">
+                  #{streakStats?.rank ?? "-"}
+                </div>
+                <div className="text-sm text-slate-400">
+                  top {streakStats?.percentile ?? 0}%
+                </div>
               </div>
             </div>
           </div>
 
           <div className="surface-soft p-5">
-            <div className="text-sm font-semibold text-blue-200">Verification status</div>
+            <div className="text-sm font-semibold text-blue-200">Verification</div>
             <div className="mt-2 text-2xl font-black text-white">
               {hasGithub ? "Ready to verify" : "Needs GitHub setup"}
             </div>
             <p className="mt-2 text-sm text-slate-300">
               {hasGithub
-                ? `Your profile is linked to ${user.githubUsername}. Hit verify after pushing code.`
-                : "Add your GitHub username to make streak checks work."}
+                ? `Linked to ${user.githubUsername}. Push code then verify.`
+                : "Add GitHub username to enable streak checks."}
             </p>
 
             <label className="mt-4 flex flex-col gap-2 text-sm text-slate-200">
-              GitHub username for verification
+              GitHub username
               <input
                 className="field"
                 value={verifyGithubUsername}
@@ -307,84 +321,84 @@ export default function Dashboard() {
 
       <section className="grid gap-4 md:grid-cols-2">
         <div className="surface p-6">
-          <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Streak history</div>
-          <div className="mt-2 text-3xl font-black text-white">
-            {displayedStreak} day{displayedStreak === 1 ? "" : "s"}
+          <div className="flex items-center justify-between">
+            <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Activity</div>
+            {streakStats?.stats && (
+              <div className="text-xs text-slate-500">
+                {streakStats.stats.thisWeek} this week
+              </div>
+            )}
           </div>
-          <div className="mt-2 text-sm text-slate-400">
-            Longest streak: <span className="font-semibold text-slate-100">{displayedLongestStreak}</span>
-          </div>
-          {verifyResult ? (
+          <StreakCalendar weeks={streakHistory?.weeks} />
+          {verifyResult && (
             <div
               className={`mt-5 rounded-2xl border px-4 py-3 text-sm ${
                 verifyResult.verified
-                  ? "border-blue-400/20 bg-blue-400/10 text-blue-100"
+                  ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
                   : "border-amber-400/20 bg-amber-400/10 text-amber-100"
               }`}
             >
               <div className="font-semibold">
-                {verifyResult.verified ? "Verified" : "Not verified"}
+                {verifyResult.verified ? "Verified!" : "Not verified"}
               </div>
               <div className="mt-1 text-slate-200/90">{verifyResult.message}</div>
             </div>
-          ) : null}
+          )}
         </div>
 
-        <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-6 shadow-[0_20px_80px_rgba(2,6,23,0.3)]">
-          <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Profile</div>
-          {hasGithub ? (
-            <div className="mt-3 inline-flex items-center rounded-full border border-blue-400/20 bg-blue-400/10 px-3 py-1.5 text-sm font-semibold text-blue-200">
-              GitHub: {user.githubUsername}
+        <div className="surface p-6">
+          <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Stats</div>
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div className="surface-soft p-4">
+              <div className="text-2xl font-black text-white">
+                {streakStats?.totalContributions ?? 0}
+              </div>
+              <div className="text-sm text-slate-400">Total contributions</div>
             </div>
-          ) : (
-            <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
-              Add your GitHub username to enable streak verification.
+            <div className="surface-soft p-4">
+              <div className="text-2xl font-black text-white">
+                {streakStats?.last30Days ?? 0}
+              </div>
+              <div className="text-sm text-slate-400">Last 30 days</div>
             </div>
-          )}
-
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="flex flex-1 flex-col gap-2 text-sm text-slate-200">
-              GitHub username
-              <input
-                className="field"
-                value={githubUsername}
-                onChange={(e) => setGithubUsername(e.target.value)}
-                placeholder="octocat"
-                type="text"
-              />
-            </label>
-            <button
-              onClick={saveProfile}
-              disabled={savingProfile}
-              className="btn-secondary"
-            >
-              {savingProfile ? "Saving..." : "Save profile"}
-            </button>
+            <div className="surface-soft p-4">
+              <div className="text-2xl font-black text-white">
+                {user.totalSessions || 0}
+              </div>
+              <div className="text-sm text-slate-400">Focus sessions</div>
+            </div>
+            <div className="surface-soft p-4">
+              <div className="text-2xl font-black text-white">
+                {formatMs(user.totalFocusTime)}
+              </div>
+              <div className="text-sm text-slate-400">Focus time</div>
+            </div>
           </div>
-
-          {profileError ? (
-            <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
-              {profileError}
-            </div>
-          ) : null}
         </div>
       </section>
 
       <section className="surface p-6">
-        <h2 className="text-lg font-bold text-white">Extension setup</h2>
-        <p className="mt-2 text-sm text-slate-400">
-          Connect your extension directly from this dashboard. Your token is sent in the background
-          and is never shown in the UI.
-        </p>
-
-        <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-end">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-white">Extension</h2>
           <button
             onClick={onAutoConnectExtension}
-            className="btn-primary"
+            className="btn-secondary"
             disabled={!token || connectingExtension}
           >
             {connectingExtension ? "Connecting..." : "Connect extension"}
           </button>
+        </div>
+
+        <div className="mt-4 flex gap-3">
+          {!isFocusing ? (
+            <button onClick={handleStartFocus} className="btn-primary bg-emerald-500 hover:bg-emerald-400">
+              Start Focus Mode
+            </button>
+          ) : (
+            <button onClick={handleStopFocus} className="btn-primary bg-rose-500 hover:bg-rose-400">
+              Stop Focus Mode
+            </button>
+          )}
         </div>
 
         {extensionStatus ? (
@@ -392,8 +406,48 @@ export default function Dashboard() {
             {extensionStatus}
           </div>
         ) : null}
+        
+        {isFocusing && (
+          <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+            Focus mode is active. Distracting sites are blocked.
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-3xl border border-white/10 bg-slate-950/70 p-6 shadow-[0_20px_80px_rgba(2,6,23,0.3)]">
+        <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Profile</div>
+        {hasGithub ? (
+          <div className="mt-3 inline-flex items-center rounded-full border border-blue-400/20 bg-blue-400/10 px-3 py-1.5 text-sm font-semibold text-blue-200">
+            GitHub: {user.githubUsername}
+          </div>
+        ) : (
+          <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+            Add GitHub username to enable streak verification.
+          </div>
+        )}
+
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <label className="flex flex-1 flex-col gap-2 text-sm text-slate-200">
+            GitHub username
+            <input
+              className="field"
+              value={githubUsername}
+              onChange={(e) => setGithubUsername(e.target.value)}
+              placeholder="octocat"
+              type="text"
+            />
+          </label>
+          <button onClick={saveProfile} disabled={savingProfile} className="btn-secondary">
+            {savingProfile ? "Saving..." : "Save profile"}
+          </button>
+        </div>
+
+        {profileError ? (
+          <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+            {profileError}
+          </div>
+        ) : null}
       </section>
     </div>
   );
 }
-
