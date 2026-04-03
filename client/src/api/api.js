@@ -52,15 +52,18 @@ export const api = {
   },
   leaderboard: {
     list: (token) => apiFetch("/api/leaderboard", { method: "GET", token }),
+    rank: (token, userId) => apiFetch(`/api/leaderboard/rank/${userId}`, { method: "GET", token }),
   },
   github: {
     verify: (token, payload) =>
       apiFetch("/api/check", { method: "POST", token, body: payload }),
     activity: (token) => apiFetch("/api/activity", { method: "GET", token }),
   },
+  streak: {
+    history: (token) => apiFetch("/api/streak/history", { method: "GET", token }),
+    stats: (token) => apiFetch("/api/streak/stats", { method: "GET", token }),
+  },
   focus: {
-    // Implemented in backend to sync extension focus sessions.
-    // Kept here so extension wiring can reuse the same client helper.
     syncSession: (payload, token) =>
       apiFetch("/api/focus/session", { method: "POST", body: payload, token }),
   },
