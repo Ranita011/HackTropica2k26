@@ -3,6 +3,9 @@ const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 const User = require("../models/User");
 
+const now = new Date();
+const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
 const DUMMY_USER = {
   username: "demouser",
   email: "demo@codestreak.local",
@@ -14,6 +17,17 @@ const DUMMY_USER = {
   totalSessions: 18,
   avatarUrl: "https://github.com/octocat.png",
   timezoneOffsetMinutes: new Date().getTimezoneOffset(),
+  lastActiveDate: now,
+  streakStartDate: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+  streakDates: [
+    new Date(sevenDaysAgo.getTime() - 5 * 24 * 60 * 60 * 1000),
+    new Date(sevenDaysAgo.getTime() - 4 * 24 * 60 * 60 * 1000),
+    new Date(sevenDaysAgo.getTime() - 3 * 24 * 60 * 60 * 1000),
+    new Date(sevenDaysAgo.getTime() - 2 * 24 * 60 * 60 * 1000),
+    new Date(sevenDaysAgo.getTime() - 1 * 24 * 60 * 60 * 1000),
+    new Date(sevenDaysAgo.getTime()),
+    new Date(now.getTime()),
+  ],
 };
 
 async function main() {
@@ -40,6 +54,7 @@ async function main() {
     email: user.email,
     password: DUMMY_USER.password,
     githubUsername: user.githubUsername,
+    streak: user.streak,
   }, null, 2));
 }
 

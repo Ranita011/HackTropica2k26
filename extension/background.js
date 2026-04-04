@@ -600,6 +600,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "GET_STREAK_STATS") {
+    getBackendConfig().then((cfg) => {
+      if (!cfg.jwtToken) {
+        sendResponse({ error: "Not authenticated" });
+        return;
+      }
+      
+      fetchAuthed(cfg, "/api/auth/me")
+        .then((userProfile) => {
+          if (!userProfile || !userProfile.githubUsername) {
+            sendResponse({ error: "GitHub username not set" });
+            return;
+          }
+          return fetchAuthed(cfg, `/api/streak/live/${userProfile.githubUsername}`);
+        })
+        .then((stats) => {
+          if (stats) {
+            sendResponse(stats);
+          }
+        })
+        .catch((err) => {
+          sendResponse({ error: err.message });
+        });
+    });
+    return true;
+  }
+
   if (message.action === "SET_EXTENSION_AUTH") {
     const jwtToken =
       typeof message.jwtToken === "string" ? message.jwtToken.trim() : "";

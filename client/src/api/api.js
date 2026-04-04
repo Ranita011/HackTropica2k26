@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 
 function normalizeBody(body) {
   if (body === undefined) return undefined;
@@ -6,7 +6,8 @@ function normalizeBody(body) {
 }
 
 export async function apiFetch(path, { method = "GET", body, token } = {}) {
-  const url = `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const url = API_URL ? `${API_URL}${normalizedPath}` : normalizedPath;
   const headers = {
     "Content-Type": "application/json",
   };
