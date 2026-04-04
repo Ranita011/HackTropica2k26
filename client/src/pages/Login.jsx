@@ -1,28 +1,61 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { api } from "../api/api.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login, authError } = useAuth();
+  const { login, updateProfile, authError } = useAuth();
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [githubUsername, setGithubUsername] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [localError, setLocalError] = useState("");
+  const [verifyResult, setVerifyResult] = useState(null);
+  const [signedIn, setSignedIn] = useState(false);
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setLocalError("");
+    setVerifyResult(null);
+    setSignedIn(false);
     setSubmitting(true);
     try {
-      await login({ email: identifier, password });
-      navigate("/dashboard");
+      const data = await login({ email: identifier, password });
+      const usernameForCheck = githubUsername.trim();
+
+      if (!usernameForCheck) {
+        navigate("/dashboard");
+        return;
+      }
+
+      setVerifying(true);
+      const res = await api.github.verify(data.token, {
+        githubUsername: usernameForCheck,
+      });
+      setVerifyResult(res);
+      setSignedIn(true);
+
+      if (data?.githubUsername !== usernameForCheck) {
+        updateProfile({
+          githubUsername: usernameForCheck,
+          timezoneOffsetMinutes: new Date().getTimezoneOffset(),
+        }).catch(() => {});
+      }
     } catch (err) {
       setLocalError(err?.message || "Login failed");
+      setSignedIn(false);
+      setVerifyResult(null);
     } finally {
+      setVerifying(false);
       setSubmitting(false);
     }
+  };
+
+  const continueToDashboard = () => {
+    navigate("/dashboard");
   };
 
   return (
@@ -81,6 +114,21 @@ export default function Login() {
             />
           </label>
 
+          <label className="flex flex-col gap-2 text-sm text-slate-200">
+            GitHub username for verification
+            <input
+              className="field"
+              value={githubUsername}
+              onChange={(e) => setGithubUsername(e.target.value)}
+              type="text"
+              placeholder="octocat"
+            />
+          </label>
+
+          <p className="text-xs text-slate-400">
+            If you enter a GitHub username here, verification runs immediately after sign in.
+          </p>
+
           {(localError || authError) && (
             <div className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
               {localError || authError}
@@ -88,12 +136,39 @@ export default function Login() {
           )}
 
           <button
-            disabled={submitting}
+            disabled={submitting || verifying}
             className="btn-primary mt-2"
             type="submit"
           >
-            {submitting ? "Signing in..." : "Sign in"}
+            {verifying
+              ? "Verifying..."
+              : submitting
+              ? "Signing in..."
+              : githubUsername.trim()
+              ? "Sign in and verify"
+              : "Sign in"}
           </button>
+
+          {signedIn && verifyResult && (
+            <div
+              className={`rounded-2xl border px-4 py-3 text-sm ${
+                verifyResult.verified
+                  ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+                  : "border-amber-400/20 bg-amber-400/10 text-amber-100"
+              }`}
+            >
+              <div className="font-semibold">
+                {verifyResult.verified ? "Verified!" : "Not verified"}
+              </div>
+              <div className="mt-1 text-slate-200/90">{verifyResult.message}</div>
+            </div>
+          )}
+
+          {signedIn && (
+            <button onClick={continueToDashboard} className="btn-secondary mt-1" type="button">
+              Continue to dashboard
+            </button>
+          )}
 
           <div className="text-sm text-slate-400 mt-2">
             No account yet?{" "}
