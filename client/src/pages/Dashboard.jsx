@@ -99,9 +99,21 @@ export default function Dashboard() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [verifyResult, setVerifyResult] = useState(null);
   const [verifying, setVerifying] = useState(false);
+  const [connectingGithub, setConnectingGithub] = useState(false);
+  const [githubConnectError, setGithubConnectError] = useState("");
   const [profileError, setProfileError] = useState("");
   const [streakStats, setStreakStats] = useState(null);
   const [streakHistory, setStreakHistory] = useState(null);
+
+  const mergeLiveIntoStats = (stats, live) => {
+    if (!live) return stats;
+    return {
+      ...stats,
+      streak: live.streak,
+      longestStreak: live.longestStreak,
+      isActiveToday: live.isActiveToday,
+    };
+  };
 
   useEffect(() => {
     setGithubUsername(user?.githubUsername || "");
@@ -109,16 +121,19 @@ export default function Dashboard() {
   }, [user]);
 
   useEffect(() => {
-    if (!token) return;
-    
-    api.streak.stats(token)
-      .then(setStreakStats)
+    if (!token || !user?.githubUsername) return;
+
+    Promise.all([
+      api.streak.stats(token),
+      api.streak.history(token),
+      api.streak.live(user.githubUsername).catch(() => null),
+    ])
+      .then(([stats, history, live]) => {
+        setStreakStats(mergeLiveIntoStats(stats, live));
+        setStreakHistory(history);
+      })
       .catch(console.error);
-    
-    api.streak.history(token)
-      .then(setStreakHistory)
-      .catch(console.error);
-  }, [token, user]);
+  }, [token, user?.githubUsername]);
 
   const timezoneOffsetMinutes = new Date().getTimezoneOffset();
 
@@ -152,11 +167,10 @@ export default function Dashboard() {
   };
 
   const verifyToday = async () => {
-    const usernameForCheck = verifyGithubUsername.trim();
-    if (!usernameForCheck) {
+    if (!user?.githubConnected) {
       setVerifyResult({
         verified: false,
-        message: "Please enter your GitHub username before verifying.",
+        message: "Connect GitHub first.",
       });
       return;
     }
@@ -164,29 +178,78 @@ export default function Dashboard() {
     setVerifyResult(null);
     setVerifying(true);
     try {
-      const res = await api.github.verify(token, {
-        githubUsername: usernameForCheck,
-      });
+      const res = await api.github.verify(token, {});
       setVerifyResult(res);
 
-      if (user?.githubUsername !== usernameForCheck) {
-        updateProfile({
-          githubUsername: usernameForCheck,
-          timezoneOffsetMinutes,
-        }).catch(() => {});
-      }
+      const liveData = await api.streak.live(user.githubUsername).catch(() => null);
 
       const [newStats, newHistory] = await Promise.all([
         api.streak.stats(token),
         api.streak.history(token),
       ]);
-      setStreakStats(newStats);
+      setStreakStats(mergeLiveIntoStats(newStats, liveData));
       setStreakHistory(newHistory);
       refreshMe().catch(() => {});
     } catch (err) {
       setVerifyResult({ verified: false, message: err?.message || "Verify failed" });
     } finally {
       setVerifying(false);
+    }
+  };
+
+  const connectGitHub = async () => {
+    if (!token || connectingGithub) return;
+    setGithubConnectError("");
+    setConnectingGithub(true);
+
+    try {
+      const { authUrl } = await api.github.oauthStart(token);
+      if (!authUrl) throw new Error("Failed to start GitHub OAuth");
+
+      const popup = window.open(authUrl, "codestreak-github-oauth", "width=560,height=760");
+      if (!popup) {
+        throw new Error("Popup blocked. Allow popups and try again.");
+      }
+
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          cleanup();
+          reject(new Error("GitHub connect timed out"));
+        }, 120000);
+
+        const poll = setInterval(() => {
+          if (popup.closed) {
+            cleanup();
+            reject(new Error("GitHub connect window was closed"));
+          }
+        }, 500);
+
+        const onMessage = (event) => {
+          if (!event.data || event.data.source !== "codestreak-github-oauth") return;
+          cleanup();
+          if (event.data.success) {
+            resolve();
+          } else {
+            reject(new Error(event.data.error || "GitHub connect failed"));
+          }
+        };
+
+        const cleanup = () => {
+          clearTimeout(timeout);
+          clearInterval(poll);
+          window.removeEventListener("message", onMessage);
+          if (!popup.closed) popup.close();
+        };
+
+        window.addEventListener("message", onMessage);
+      });
+
+      await refreshMe();
+      setVerifyResult({ verified: true, message: "GitHub connected successfully. You can verify now." });
+    } catch (err) {
+      setGithubConnectError(err?.message || "Failed to connect GitHub");
+    } finally {
+      setConnectingGithub(false);
     }
   };
 
@@ -236,6 +299,7 @@ export default function Dashboard() {
       : streakStats?.longestStreak ?? user.longestStreak ?? 0;
 
   const hasGithub = Boolean(user?.githubUsername);
+  const hasGithubConnected = Boolean(user?.githubConnected);
   const isActiveToday = streakStats?.isActiveToday ?? false;
   const isStreakAtRisk = streakStats?.isStreakAtRisk ?? false;
 
@@ -289,13 +353,30 @@ export default function Dashboard() {
           <div className="surface-soft p-5">
             <div className="text-sm font-semibold text-blue-200">Verification</div>
             <div className="mt-2 text-2xl font-black text-white">
-              {hasGithub ? "Ready to verify" : "Needs GitHub setup"}
+              {hasGithubConnected ? "Ready to verify" : "Connect GitHub"}
             </div>
             <p className="mt-2 text-sm text-slate-300">
-              {hasGithub
-                ? `Linked to ${user.githubUsername}. Push code then verify.`
-                : "Add GitHub username to enable streak checks."}
+              {hasGithubConnected
+                ? `Connected as ${user.githubUsername}. Push code then verify.`
+                : "Connect once with GitHub to enable streak verification."}
             </p>
+
+            {!hasGithubConnected && (
+              <button
+                onClick={connectGitHub}
+                disabled={connectingGithub}
+                className="btn-secondary mt-4 w-full"
+                type="button"
+              >
+                {connectingGithub ? "Connecting GitHub..." : "Connect GitHub"}
+              </button>
+            )}
+
+            {githubConnectError && (
+              <div className="mt-3 rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+                {githubConnectError}
+              </div>
+            )}
 
             <label className="mt-4 flex flex-col gap-2 text-sm text-slate-200">
               GitHub username
@@ -305,12 +386,13 @@ export default function Dashboard() {
                 onChange={(e) => setVerifyGithubUsername(e.target.value)}
                 placeholder="octocat"
                 type="text"
+                disabled={hasGithubConnected}
               />
             </label>
 
             <button
               onClick={verifyToday}
-              disabled={verifying || !verifyGithubUsername.trim()}
+              disabled={verifying || !hasGithubConnected}
               className="btn-primary mt-5 w-full"
             >
               {verifying ? "Verifying..." : "Verify today"}
