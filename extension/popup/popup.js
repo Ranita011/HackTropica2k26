@@ -15,6 +15,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const blockedCount = document.getElementById("blockedCount");
   const sessionCount = document.getElementById("sessionCount");
   const totalTime = document.getElementById("totalTime");
+  const streakValue = document.getElementById("streakValue");
+  const rankValue = document.getElementById("rankValue");
 
   // Sites lists
   const blockedSitesList = document.getElementById("blockedSitesList");
@@ -33,6 +35,21 @@ document.addEventListener("DOMContentLoaded", () => {
   // ─── Initialize ─────────────────────────────────────────
   loadStatus();
   loadSites();
+  loadStreakStats();
+
+  // ─── Streak Stats ───────────────────────────────────────
+  function loadStreakStats() {
+    chrome.runtime.sendMessage({ action: "GET_STREAK_STATS" }, (response) => {
+      if (!response || response.error) {
+        streakValue.textContent = response?.error || "--";
+        rankValue.textContent = "#--";
+        return;
+      }
+      
+      streakValue.textContent = response.streak || 0;
+      rankValue.textContent = "#" + (response.rank || "--");
+    });
+  }
 
   // ─── Timer Logic ────────────────────────────────────────
   function startTimer(startTime) {
@@ -130,6 +147,7 @@ document.addEventListener("DOMContentLoaded", () => {
           setActiveUI(false);
           stopTimer();
           loadStatus(); // Refresh stats
+          loadStreakStats(); // Refresh streak from backend
         }
       });
     } else {
@@ -139,6 +157,7 @@ document.addEventListener("DOMContentLoaded", () => {
           setActiveUI(true);
           startTimer(response.startTime);
           loadStatus();
+          loadStreakStats(); // Refresh streak from backend
         }
       });
     }

@@ -10,9 +10,35 @@
   let elapsedTimerInterval = null;
   let sessionStartTime = null;
 
-  const isLocalWebApp =
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1";
+  const WEB_APP_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:3000",
+  ];
+  const TOKEN_KEY = "codestreak_token";
+
+  function isWebApp() {
+    const origin = window.location.origin;
+    return WEB_APP_ORIGINS.includes(origin);
+  }
+
+  async function syncAuthFromWebApp() {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+
+    const stored = await chrome.storage.local.get(["jwtToken"]);
+    if (stored.jwtToken === token) return;
+
+    await chrome.storage.local.set({
+      jwtToken: token,
+      apiBaseUrl: "http://localhost:5000"
+    });
+    console.log("[CodeStreak] Auth synced from web app localStorage");
+  }
+
+  if (isWebApp()) {
+    syncAuthFromWebApp();
+  }
 
   // Check if this page should be blocked on initial load
   chrome.storage.local.get(
@@ -61,62 +87,91 @@
   });
 
   // Web app bridge: allows localhost dashboard to push JWT into extension storage.
-  if (isLocalWebApp) {
+  if (isWebApp()) {
     window.addEventListener("message", (event) => {
       if (event.source !== window) return;
 
       const data = event.data;
       if (!data || typeof data !== "object") return;
       if (data.source !== "codestreak-web") return;
-      if (data.type !== "CODESTREAK_SET_AUTH") return;
+      
+      console.log("[CodeStreak Content] Received message from Web:", data.type, data);
+      
+      if (!["CODESTREAK_SET_AUTH", "CODESTREAK_START_FOCUS", "CODESTREAK_STOP_FOCUS", "CODESTREAK_GET_STATUS"].includes(data.type)) return;
 
       const requestId = data.requestId;
       const payload = data.payload || {};
 
-      const respondToWeb = (success, error = "") => {
-        window.postMessage(
-          {
-            source: "codestreak-extension",
-            type: "CODESTREAK_SET_AUTH_RESULT",
-            requestId,
-            success,
-            ...(success ? {} : { error: error || "Unknown error" }),
-          },
-          "*"
-        );
+      const respondToWeb = (success, error = "", responseType = "CODESTREAK_SET_AUTH_RESULT", responsePayload = {}) => {
+        const msg = {
+          source: "codestreak-extension",
+          type: responseType,
+          requestId,
+          success,
+          payload: responsePayload,
+          ...(success ? {} : { error: error || "Unknown error" }),
+        };
+        console.log("[CodeStreak Content] Sending response to Web:", msg);
+        window.postMessage(msg, "*");
       };
 
       // If extension context is not available (disabled/reloaded), fail fast.
       if (!chrome || !chrome.runtime || !chrome.runtime.id) {
-        respondToWeb(false, "Extension unavailable. Reload the extension.");
+        respondToWeb(false, "Extension unavailable. Reload the extension.", data.type + "_RESULT");
         return;
       }
 
       try {
-        chrome.runtime.sendMessage(
-          {
-            action: "SET_EXTENSION_AUTH",
-            jwtToken: payload.jwtToken,
-            apiBaseUrl: payload.apiBaseUrl,
-          },
-          (response) => {
-            let success = false;
-            let error = "Unknown error";
+        if (data.type === "CODESTREAK_SET_AUTH") {
+          chrome.runtime.sendMessage(
+            {
+              action: "SET_EXTENSION_AUTH",
+              jwtToken: payload.jwtToken,
+              apiBaseUrl: payload.apiBaseUrl,
+            },
+            (response) => {
+              let success = false;
+              let error = "Unknown error";
 
-            if (chrome.runtime.lastError) {
-              error = chrome.runtime.lastError.message || "Extension unavailable";
-            } else if (response && response.success) {
-              success = true;
-              error = "";
-            } else if (response && typeof response.message === "string") {
-              error = response.message;
+              if (chrome.runtime.lastError) {
+                console.error("[CodeStreak Content] SET_AUTH error:", chrome.runtime.lastError.message);
+                error = chrome.runtime.lastError.message || "Extension unavailable";
+              } else if (response && response.success) {
+                console.log("[CodeStreak Content] SET_AUTH success");
+                success = true;
+                error = "";
+              } else if (response && typeof response.message === "string") {
+                error = response.message;
+              }
+
+              respondToWeb(success, error, "CODESTREAK_SET_AUTH_RESULT");
             }
-
-            respondToWeb(success, error);
-          }
-        );
+          );
+        } else if (data.type === "CODESTREAK_START_FOCUS") {
+          chrome.runtime.sendMessage({ action: "START_FOCUS" }, (response) => {
+             if (chrome.runtime.lastError) {
+                 console.error("[CodeStreak Content] START_FOCUS error:", chrome.runtime.lastError.message);
+                 return respondToWeb(false, chrome.runtime.lastError.message, "CODESTREAK_START_FOCUS_RESULT");
+             }
+             respondToWeb(true, "", "CODESTREAK_START_FOCUS_RESULT", response || {});
+          });
+        } else if (data.type === "CODESTREAK_STOP_FOCUS") {
+          chrome.runtime.sendMessage({ action: "STOP_FOCUS" }, (response) => {
+             if (chrome.runtime.lastError) {
+                 return respondToWeb(false, chrome.runtime.lastError.message, "CODESTREAK_STOP_FOCUS_RESULT");
+             }
+             respondToWeb(true, "", "CODESTREAK_STOP_FOCUS_RESULT", response || {});
+          });
+        } else if (data.type === "CODESTREAK_GET_STATUS") {
+          chrome.runtime.sendMessage({ action: "GET_STATUS" }, (response) => {
+             if (chrome.runtime.lastError) {
+                 return respondToWeb(false, chrome.runtime.lastError.message, "CODESTREAK_GET_STATUS_RESULT");
+             }
+             respondToWeb(true, "", "CODESTREAK_GET_STATUS_RESULT", response || {});
+          });
+        }
       } catch (err) {
-        respondToWeb(false, err?.message || "Extension bridge error");
+        respondToWeb(false, err?.message || "Extension bridge error", data.type + "_RESULT");
       }
     });
   }

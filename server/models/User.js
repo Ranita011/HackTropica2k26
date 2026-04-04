@@ -48,7 +48,7 @@ const userSchema = new mongoose.Schema(
     ],
     totalFocusTime: {
       type: Number,
-      default: 0, // in milliseconds
+      default: 0,
     },
     totalSessions: {
       type: Number,
@@ -58,10 +58,24 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-
-    // Browser-provided timezone offset in minutes (e.g. UTC-5 => 300)
-    // Used to decide what "today" means for GitHub verification.
     timezoneOffsetMinutes: {
+      type: Number,
+      default: null,
+    },
+    lastActiveDate: {
+      type: Date,
+      default: null,
+    },
+    streakDates: [
+      {
+        type: Date,
+      },
+    ],
+    streakStartDate: {
+      type: Date,
+      default: null,
+    },
+    globalRank: {
       type: Number,
       default: null,
     },

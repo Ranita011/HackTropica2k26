@@ -8,6 +8,7 @@ Use this account for local testing after running the seed script in `server`:
 - Email: `demo@codestreak.local`
 - Password: `DemoUser123!`
 - GitHub username: `octocat`
+- demouser password: `DemoUser123!`
 
 Login supports either email or username with the same password.
 
