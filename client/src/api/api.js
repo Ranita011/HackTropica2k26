@@ -59,10 +59,12 @@ export const api = {
     verify: (token, payload) =>
       apiFetch("/api/check", { method: "POST", token, body: payload }),
     activity: (token) => apiFetch("/api/activity", { method: "GET", token }),
+    oauthStart: (token) => apiFetch("/api/github/oauth/start", { method: "GET", token }),
   },
   streak: {
     history: (token) => apiFetch("/api/streak/history", { method: "GET", token }),
     stats: (token) => apiFetch("/api/streak/stats", { method: "GET", token }),
+    live: (username) => apiFetch(`/api/streak/live/${encodeURIComponent(username)}`, { method: "GET" }),
   },
   focus: {
     syncSession: (payload, token) =>

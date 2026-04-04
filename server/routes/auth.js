@@ -17,6 +17,8 @@ function sanitizeUser(user) {
 
   const plain = user.toObject ? user.toObject() : { ...user };
   delete plain.password;
+  plain.githubConnected = Boolean(plain.githubAccessToken);
+  delete plain.githubAccessToken;
   return plain;
 }
 
@@ -140,7 +142,7 @@ router.put("/profile", protect, async (req, res) => {
     }
 
     await user.save();
-    res.json(user);
+    res.json(sanitizeUser(user));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
