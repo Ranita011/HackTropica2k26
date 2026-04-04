@@ -28,6 +28,18 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    githubId: {
+      type: String,
+      default: "",
+    },
+    githubAccessToken: {
+      type: String,
+      default: "",
+    },
+    githubConnectedAt: {
+      type: Date,
+      default: null,
+    },
     streak: {
       type: Number,
       default: 0,

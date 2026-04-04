@@ -16,19 +16,30 @@ router.get("/live/:username", async (req, res) => {
     const cleanUsername = username.trim().toLowerCase();
 
     const githubToken = process.env.GITHUB_TOKEN;
-    const headers = {
+    const baseHeaders = {
       Accept: "application/vnd.github.v3+json",
       "User-Agent": "CodeStreak-Enforcer",
-      ...(githubToken ? { Authorization: `token ${githubToken}` } : {}),
     };
 
-    // Fetch events from last 90 days (GitHub API limit is 90 days)
-    const githubRes = await axios.get(
-      `https://api.github.com/users/${cleanUsername}/events?per_page=100`,
-      { headers }
-    );
+    const url = `https://api.github.com/users/${cleanUsername}/events?per_page=100`;
+    let events = [];
 
-    const events = githubRes.data || [];
+    try {
+      const githubRes = await axios.get(url, {
+        headers: {
+          ...baseHeaders,
+          ...(githubToken ? { Authorization: `token ${githubToken}` } : {}),
+        },
+      });
+      events = githubRes.data || [];
+    } catch (error) {
+      if (error?.response?.status === 401 && githubToken) {
+        const retryRes = await axios.get(url, { headers: baseHeaders });
+        events = retryRes.data || [];
+      } else {
+        throw error;
+      }
+    }
     const now = new Date();
     const offsetMinutes = 0; // Use UTC for simplicity
 
@@ -162,6 +173,9 @@ router.get("/live/:username", async (req, res) => {
       recentActivity: pushDates.slice(-7),
     });
   } catch (error) {
+    if (error.response && error.response.status === 401) {
+      return res.status(502).json({ message: "GitHub authentication failed. Remove or refresh GITHUB_TOKEN in server/.env." });
+    }
     if (error.response && error.response.status === 404) {
       return res.status(404).json({ message: "GitHub user not found" });
     }
