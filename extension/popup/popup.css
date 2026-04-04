@@ -331,6 +331,79 @@ body {
   margin-top: 2px;
 }
 
+/* ─── Streak Section ────────────────────────────────────────── */
+.streak-section {
+  padding: 0 20px 16px;
+}
+
+.streak-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(0, 255, 136, 0.08) 0%, rgba(0, 255, 136, 0.02) 100%);
+  border: 1px solid rgba(0, 255, 136, 0.2);
+  border-radius: 12px;
+}
+
+.streak-icon {
+  font-size: 28px;
+  margin-right: 12px;
+  animation: streak-flame 1.5s ease-in-out infinite;
+}
+
+@keyframes streak-flame {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.streak-info {
+  flex: 1;
+}
+
+.streak-value {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+  text-shadow: 0 0 20px var(--accent-glow);
+}
+
+.streak-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+.streak-rank {
+  text-align: right;
+  padding-left: 16px;
+  border-left: 1px solid var(--border);
+}
+
+.rank-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rank-value {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--blue);
+}
+
 /* ─── Tabs Navigation ────────────────────────────────────── */
 .tabs-nav {
   display: flex;

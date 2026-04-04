@@ -5,15 +5,13 @@ const { protect } = require("../middleware/auth");
 
 const router = express.Router();
 
-function getLocalMidnightUTCms(date, offsetMinutes) {
-  // When offsetMinutes is null, fall back to server-local midnight.
+function getLocalDateUTCms(date, offsetMinutes) {
   if (!Number.isFinite(offsetMinutes)) {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
     return d.getTime();
   }
 
-  // Shift UTC timestamp by user offset so local time components can be read with UTC getters.
   const shifted = new Date(date.getTime() + offsetMinutes * 60000);
   const y = shifted.getUTCFullYear();
   const m = shifted.getUTCMonth();
@@ -23,7 +21,23 @@ function getLocalMidnightUTCms(date, offsetMinutes) {
   return midnightShiftedUTC - offsetMinutes * 60000;
 }
 
-// POST /api/github/check — verify GitHub activity and update streak
+function isSameLocalDay(date1Ms, date2Ms, offsetMinutes) {
+  const d1 = getLocalDateUTCms(new Date(date1Ms), offsetMinutes);
+  const d2 = getLocalDateUTCms(new Date(date2Ms), offsetMinutes);
+  return d1 === d2;
+}
+
+function getDaysDifference(date1, date2, offsetMinutes) {
+  const d1 = getLocalDateUTCms(date1, offsetMinutes);
+  const d2 = getLocalDateUTCms(date2, offsetMinutes);
+  return Math.floor((d2 - d1) / (24 * 60 * 60 * 1000));
+}
+
+function normalizeToLocalMidnight(date, offsetMinutes) {
+  const ms = getLocalDateUTCms(date, offsetMinutes);
+  return new Date(ms);
+}
+
 router.post("/check", protect, async (req, res) => {
   try {
     const providedUsernameRaw = req.body?.githubUsername;
@@ -48,7 +62,6 @@ router.post("/check", protect, async (req, res) => {
         .json({ message: "Please provide your GitHub username first." });
     }
 
-    // Fetch recent GitHub events
     const githubToken = process.env.GITHUB_TOKEN;
     const headers = {
       Accept: "application/vnd.github.v3+json",
@@ -57,79 +70,95 @@ router.post("/check", protect, async (req, res) => {
     };
 
     const githubRes = await axios.get(
-      `https://api.github.com/users/${user.githubUsername}/events?per_page=30`,
-      {
-        headers,
-      }
+      `https://api.github.com/users/${user.githubUsername}/events?per_page=100`,
+      { headers }
     );
 
     const events = githubRes.data;
-
-    // Find push events from today
     const now = new Date();
-    const todayMidnightUTCms = getLocalMidnightUTCms(
-      now,
-      user.timezoneOffsetMinutes
-    );
+    const offset = user.timezoneOffsetMinutes;
+    const todayMidnightMs = getLocalDateUTCms(now, offset);
+
     const todayPushEvents = events.filter((event) => {
       const eventDate = new Date(event.created_at);
       return (
-        event.type === "PushEvent" && eventDate.getTime() >= todayMidnightUTCms
+        event.type === "PushEvent" && eventDate.getTime() >= todayMidnightMs
       );
     });
 
     const hasCommittedToday = todayPushEvents.length > 0;
 
     if (hasCommittedToday) {
-      const lastCommitDate = user.lastCommitDate
-        ? new Date(user.lastCommitDate)
-        : null;
+      const todayDate = normalizeToLocalMidnight(now, offset);
+      const alreadyActiveToday = user.lastActiveDate &&
+        isSameLocalDay(user.lastActiveDate, now, offset);
 
-      let shouldIncrement = true;
-      if (lastCommitDate) {
-        const lastCommitMidnightUTCms = getLocalMidnightUTCms(
-          lastCommitDate,
-          user.timezoneOffsetMinutes
-        );
+      if (!alreadyActiveToday) {
+        const daysSinceLastActive = user.lastActiveDate
+          ? getDaysDifference(user.lastActiveDate, now, offset)
+          : Infinity;
 
-        // Same day check has already been counted before.
-        shouldIncrement = lastCommitMidnightUTCms !== todayMidnightUTCms;
-      } else {
-        shouldIncrement = true;
+        if (daysSinceLastActive === 1) {
+          user.streak += 1;
+        } else if (daysSinceLastActive > 1) {
+          user.streak = 1;
+          user.streakStartDate = todayDate;
+          user.streakDates = [];
+        } else {
+          user.streak = 1;
+          user.streakStartDate = user.streakStartDate || todayDate;
+        }
+
+        if (user.streak > user.longestStreak) {
+          user.longestStreak = user.streak;
+        }
+
+        user.streakDates.push(todayDate);
+        if (user.streakDates.length > 365) {
+          user.streakDates = user.streakDates.slice(-365);
+        }
       }
 
-      if (shouldIncrement) {
-        user.streak = (user.streak || 0) + 1;
-      }
-
-      user.lastCommitDate = new Date();
-      if (user.streak > user.longestStreak) {
-        user.longestStreak = user.streak;
-      }
-
+      user.lastActiveDate = now;
+      user.lastCommitDate = now;
       await user.save();
+
+      const daysUntilStreakEnds = user.streak > 0 ? 1 - daysSinceLastActive : 0;
 
       return res.json({
         verified: true,
         githubUsername: user.githubUsername,
         streak: user.streak,
         longestStreak: user.longestStreak,
-        message: `Great job! You have ${todayPushEvents.length} push event(s) today. Streak: ${user.streak} days!`,
+        streakStartDate: user.streakStartDate,
+        message: alreadyActiveToday
+          ? `Already counted today! Keep it up! Streak: ${user.streak} days 🔥`
+          : daysSinceLastActive > 1
+          ? `Streak reset! New streak started: ${user.streak} day! Let's build it back up!`
+          : `${todayPushEvents.length} push event(s) today. Streak: ${user.streak} days! 🔥`,
         todayEvents: todayPushEvents.length,
+        alreadyActiveToday,
       });
     } else {
       await user.save();
+
+      const lastActiveDaysAgo = user.lastActiveDate
+        ? getDaysDifference(user.lastActiveDate, now, offset)
+        : null;
 
       return res.json({
         verified: false,
         githubUsername: user.githubUsername,
         streak: user.streak,
-        message: "No push events found today. Streak stays the same.",
+        longestStreak: user.longestStreak,
+        message: lastActiveDaysAgo !== null && lastActiveDaysAgo >= 1
+          ? `Last active ${lastActiveDaysAgo} day(s) ago. Streak at risk!`
+          : "No push events found today. Keep coding!",
         todayEvents: 0,
+        lastActiveDaysAgo,
       });
     }
   } catch (error) {
-    // Handle GitHub API rate limit
     if (error.response && error.response.status === 403) {
       return res.status(429).json({
         message: "GitHub API rate limit exceeded. Try again later.",
@@ -139,7 +168,6 @@ router.post("/check", protect, async (req, res) => {
   }
 });
 
-// GET /api/github/activity — fetch recent activity summary
 router.get("/activity", protect, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -148,7 +176,7 @@ router.get("/activity", protect, async (req, res) => {
     }
 
     const githubRes = await axios.get(
-      `https://api.github.com/users/${user.githubUsername}/events?per_page=10`,
+      `https://api.github.com/users/${user.githubUsername}/events?per_page=30`,
       {
         headers: {
           Accept: "application/vnd.github.v3+json",

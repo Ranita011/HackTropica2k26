@@ -30,6 +30,7 @@ app.use("/api/github", require("./routes/github"));
 // PRD alias: POST /api/check and GET /api/activity.
 app.use("/api", require("./routes/github"));
 app.use("/api/focus", require("./routes/focus"));
+app.use("/api/streak", require("./routes/streak"));
 
 // Health check
 app.get("/api/health", (req, res) => {
